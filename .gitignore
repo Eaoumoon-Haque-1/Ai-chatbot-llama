@@ -1,0 +1,9 @@
+venv/
+__pycache__/
+*.pyc
+.env
+models/
+storage/
+data/*.pdf
+data/*.docx
+data/*.pptx

@@ -1,0 +1,68 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <title>DocMind Chatbot</title>
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+  <div class="app-shell">
+
+    <aside class="sidebar">
+      <div class="brand">
+        <div class="logo">AI</div>
+        <div>
+          <h2>DocMind</h2>
+          <p>Chat history</p>
+        </div>
+      </div>
+
+      <button class="new-chat" onclick="newChat()">+ New Chat</button>
+
+      <div class="history-title">Previous Chats</div>
+
+      <div id="chatHistory" class="chat-history">
+        <div class="history-item active">Current chat</div>
+      </div>
+    </aside>
+
+    <main class="main">
+      <section class="hero">
+        <p id="greeting">Good Evening, Eaoumoon</p>
+        <h1>What do you want to know?</h1>
+      </section>
+
+      <section id="messages" class="messages">
+        <div class="bot message">
+          <div class="avatar bot-avatar">🤖</div>
+          <div class="bubble">Upload a file and ask me anything from it.</div>
+        </div>
+      </section>
+
+      <section class="composer">
+        <textarea id="userInput" placeholder="Ask anything from your documents..."></textarea>
+
+        <div class="composer-bottom">
+          <div class="tools">
+            <select id="modelSelect">
+              <option value="llama">Llama 3.1 8B</option>
+              <option value="gpt4o-mini">GPT-4o Mini</option>
+            </select>
+
+            <label class="file-upload">
+              Upload file
+              <input type="file" id="fileInput">
+            </label>
+
+            <span id="uploadStatus">No file uploaded</span>
+          </div>
+
+          <button class="send-btn" onclick="sendMessage()">Send</button>
+        </div>
+      </section>
+    </main>
+
+  </div>
+
+  <script src="script.js"></script>
+</body>
+</html>
