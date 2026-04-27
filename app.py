@@ -1,16 +1,9 @@
 import os
-
-print("1. Starting app.py...")
-
 import chromadb
-print("2. chromadb imported.")
-
 from dotenv import load_dotenv
 from fastapi import FastAPI, UploadFile, File
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel
-
-print("3. FastAPI imports done.")
 
 from llama_index.core import (
     VectorStoreIndex,
@@ -18,63 +11,72 @@ from llama_index.core import (
     Settings,
     SimpleDirectoryReader,
 )
-print("4. LlamaIndex core imported.")
-
 from llama_index.vector_stores.chroma import ChromaVectorStore
-print("5. ChromaVectorStore imported.")
-
 from llama_index.embeddings.huggingface import HuggingFaceEmbedding
-print("6. HuggingFaceEmbedding imported.")
-
 from llama_index.llms.openrouter import OpenRouter
-print("7. OpenRouter imported.")
 
+# Load Environment Variables
 load_dotenv()
-print("8. .env loaded.")
 
 DB_DIR = "storage/chroma"
 DATA_DIR = "data"
 
+# Available Models
 AVAILABLE_MODELS = {
     "llama": "meta-llama/llama-3.1-8b-instruct",
     "gpt4o-mini": "openai/gpt-4o-mini",
 }
 
-DEFAULT_MODEL = os.getenv("DEFAULT_MODEL", AVAILABLE_MODELS["llama"])
+DEFAULT_MODEL = os.getenv(
+    "DEFAULT_MODEL",
+    AVAILABLE_MODELS["llama"]
+)
 
-print("9. Loading embedding model...")
+# Embedding Model
 Settings.embed_model = HuggingFaceEmbedding(
     model_name="BAAI/bge-small-en-v1.5",
     cache_folder="models"
 )
-print("10. Embedding model loaded.")
 
-print("11. Connecting ChromaDB...")
+# ChromaDB Setup
+os.makedirs(DB_DIR, exist_ok=True)
+
 chroma_client = chromadb.PersistentClient(path=DB_DIR)
-chroma_collection = chroma_client.get_or_create_collection("chatbot_docs")
-print("12. ChromaDB connected.")
 
-vector_store = ChromaVectorStore(chroma_collection=chroma_collection)
-storage_context = StorageContext.from_defaults(vector_store=vector_store)
+chroma_collection = chroma_client.get_or_create_collection(
+    "chatbot_docs"
+)
 
-print("13. Loading vector index...")
+vector_store = ChromaVectorStore(
+    chroma_collection=chroma_collection
+)
+
+storage_context = StorageContext.from_defaults(
+    vector_store=vector_store
+)
+
+# Load Existing Index
 index = VectorStoreIndex.from_vector_store(
     vector_store,
     storage_context=storage_context
 )
-print("14. Vector index loaded.")
 
+# FastAPI App
 app = FastAPI()
-print("15. FastAPI app created.")
 
+# Request Schema
 
 class ChatRequest(BaseModel):
     message: str
     model: str = "llama"
 
 
+# Query Engine
 def get_query_engine(model_key: str):
-    model_name = AVAILABLE_MODELS.get(model_key, DEFAULT_MODEL)
+    model_name = AVAILABLE_MODELS.get(
+        model_key,
+        DEFAULT_MODEL
+    )
 
     llm = OpenRouter(
         api_key=os.getenv("OPENROUTER_API_KEY"),
@@ -83,43 +85,88 @@ def get_query_engine(model_key: str):
 
     return index.as_query_engine(
         llm=llm,
-        similarity_top_k=12,
-        response_mode="tree_summarize",
+        similarity_top_k=15,
+        response_mode="compact",
     )
 
+# Chat Endpoint
 
 @app.post("/chat")
 def chat(req: ChatRequest):
     query_engine = get_query_engine(req.model)
-    response = query_engine.query(req.message)
-    return {"answer": str(response)}
 
+    detailed_prompt = f"""
+You are a professional AI document assistant.
+
+Use the uploaded document context to answer the user.
+
+Rules:
+- Give detailed answers.
+- Use headings when helpful.
+- Use bullet points when useful.
+- Explain clearly.
+- Do not answer in only 1 or 2 lines unless necessary.
+- If document lacks info, say so honestly.
+
+User Question:
+{req.message}
+"""
+
+    response = query_engine.query(detailed_prompt)
+
+    return {
+        "answer": str(response)
+    }
+
+# Upload Endpoint
 
 @app.post("/upload")
 async def upload_file(file: UploadFile = File(...)):
-    allowed = [".pdf", ".txt", ".md", ".png", ".jpg", ".jpeg"]
-    filename = file.filename
+    allowed_extensions = [
+        ".pdf",
+        ".txt",
+        ".md",
+        ".png",
+        ".jpg",
+        ".jpeg"
+    ]
 
-    if not any(filename.lower().endswith(ext) for ext in allowed):
-        return {"error": "Only PDF, TXT, MD, PNG, JPG, JPEG files are allowed."}
+    filename = file.filename.lower()
+
+    if not any(filename.endswith(ext) for ext in allowed_extensions):
+        return {
+            "error": "Only PDF, TXT, MD, PNG, JPG, JPEG files are allowed."
+        }
 
     os.makedirs(DATA_DIR, exist_ok=True)
 
-    file_path = os.path.join(DATA_DIR, filename)
+    file_path = os.path.join(
+        DATA_DIR,
+        file.filename
+    )
 
     with open(file_path, "wb") as f:
         f.write(await file.read())
 
-    documents = SimpleDirectoryReader(input_files=[file_path]).load_data()
+    # Read Document
+    documents = SimpleDirectoryReader(
+        input_files=[file_path]
+    ).load_data()
 
+    # Add to Vector Store
     VectorStoreIndex.from_documents(
         documents,
         storage_context=storage_context
     )
 
-    return {"message": f"{filename} uploaded and indexed successfully."}
+    return {
+        "message": f"{file.filename} uploaded and indexed successfully."
+    }
 
+# Serve Frontend
 
-app.mount("/", StaticFiles(directory="static", html=True), name="static")
-
-print("16. app.py fully loaded.")
+app.mount(
+    "/",
+    StaticFiles(directory="static", html=True),
+    name="static"
+)
